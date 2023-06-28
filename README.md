@@ -9,7 +9,7 @@ Updated versions that print additional output (`*_addOutput.slim`) were saved wi
 
 ```eidos
 // additional output
-outputSample.genome1.output(filePath = getwd() +"/"+ OUTPUTSTEM + "_100.out");
+outputSample.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_100.out");
 sampledIndividuals = sample(p1.individuals, 1000);
 sampledIndividuals.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_1000.out");
 ```
@@ -17,7 +17,6 @@ sampledIndividuals.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_1000
 Results in our response are based on the `*_100.out` data only, analogous to a uniform coverage of 100 effective sequencing reads, matching the method of Soni et al.
 
 Each script was run with a weakly or strongly deleterious mutation background as follows:
-
 
 ```bash
 # Weakly deleterious background with no beneficial mutations (Weak / -)
