@@ -1,7 +1,7 @@
 # Response to Soni et al.
 Modified scripts, analysis code, and source data for response to Soni et al. 2023.
 
-## Scripts
+## Description
 
 Two SLiM scripts (with and without a beneficial mutation introduced) were downloaded from [Soni et al.](https://github.com/vivaksoni/Gu_etal_2023_response/tree/main/scripts) (accessed 2023/06/16).
 
