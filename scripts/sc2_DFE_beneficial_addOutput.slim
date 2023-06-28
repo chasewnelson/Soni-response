@@ -1,0 +1,190 @@
+//slim -d GENOMESIZE=30000 -d MU=2.135e-6 -d INIT=1 -d K=1e5 -d REPRO=1 -d RUNTIME=168 -d R=5.5e-5 -d XI=0 
+//-d BURSTN=100 -d "OUTPUTSTEM='DFE1_rep1'" -d d_f0=0.1 -d d_f1=0.7 -d d_f2=0.1 -d d_f3=0.1 
+//-d simID="$i" sc2_DFE_beneficial.slim
+
+initialize()
+{
+	//start the clock
+	defineGlobal("start", clock());
+	defineGlobal("AF_check", T); //Boolean used once files are output at AF>=0.5
+	initializeSLiMModelType("nonWF");
+	//initialize mutation rate
+	initializeMutationRate(MU);
+	//initialize recombination rate
+	initializeRecombinationRate(R);	
+	// mutation types: 
+    //s = [0.0, -0.001, -0.01, -0.1, -1]	
+    initializeMutationType("m1", 0.5, "f", 0.0); //selectively neutral
+    initializeMutationType("m2", 0.5, "s", "return runif(1, -0.01, -0.001);"); //weakly deleterious 
+    initializeMutationType("m3", 0.5, "s", "return runif(1, -0.1, -0.01);"); //moderately deleterious 
+    initializeMutationType("m4", 0.5, "s", "return runif(1, -1, -0.1);"); //strongly deleterious 
+    initializeMutationType("m0", 1.0, "f", 10); //Beneficial
+	 initializeGenomicElementType("g1", c(m1, m2, m3, m4), c(d_f0, d_f1, d_f2, d_f3));
+	 //Add neutral genomic element class for 3rd position
+	 initializeGenomicElementType("g2", 1, 1);
+	 
+	//Loop through genome in increments of 3, setting first two sites as g1 (DFE), and third site as g2 (neutral)
+	for (i in seq(0, GENOMESIZE-1, 3))
+	{ 
+		initializeGenomicElement(g1, i, i+1);
+		initializeGenomicElement(g2, i+2, i+2); 
+	}
+}
+
+
+//reproduction callback block that is used for all simulations regardless of model options
+reproduction()
+{
+	//check if progeny skew option is being used; if it is then draw a random number and if it is less than the value for XI, set local variable to do a burst reproduction event.
+	burst = F;
+	if(runif(1) < XI)
+	{
+			burst = T;
+	}
+	//sample a single individual from the same subpopulation to serve as the recombination partner for all reproduction events of the current focus individual
+	recombPartner = subpop.sampleIndividuals(1);
+	//if a burst reproduction event is occurring, create BURSTN children, each with randomly drawn recombination breakpoints.
+	//otherwise, produce REPRO children
+	if(burst)
+	{
+		for(i in 1:BURSTN)
+		{
+			breaks = sim.chromosome.drawBreakpoints(individual);
+			subpop.addRecombinant(individual.genome1, recombPartner.genome1, breaks, NULL, NULL, NULL);
+		}
+	}
+	else if(REPRO > 0)
+	{
+		for(i in 1:REPRO)
+		{
+			breaks = sim.chromosome.drawBreakpoints(individual);
+			subpop.addRecombinant(individual.genome1, recombPartner.genome1, breaks, NULL, NULL, NULL);
+		}
+	}
+}
+
+1 first()
+{
+     for(mutType in community.allMutationTypes)
+    {
+        mutType.convertToSubstitution = T;
+        mutType.mutationStackGroup = 1;
+        mutType.mutationStackPolicy = "l";
+    }
+}
+
+1 early()
+{
+	sim.addSubpop("p1", 1);
+}
+
+2:1680 early()
+{
+	//debug output occurs every 10 and 100+1 ticks
+    x = community.tick;
+	if(x%10==0 | x%100==1)
+	{
+        print(x + " Early:");
+		print("Debug Output");
+		print("Mem Usage: " + usage(peak = F));
+		print("Runtime: " + (clock()-start));
+		print("Population size: " + p1.individualCount);
+	}
+	//scale fitness based on population's carrying capcity
+	p1.fitnessScaling = K/p1.individualCount;
+}
+
+
+168 early()
+{
+    // save the state of the simulation
+	sim.outputFull(OUTPUTSTEM + '_' +  simID +  ".txt");
+	target = sample(p1.individuals, 1);
+	target.genome1.addNewDrawnMutation(m0, 15001);
+	
+}
+
+168:1680 late()
+{
+
+	mut = sim.mutationsOfType(m0);
+	
+	if (size(mut) == 1)
+	{
+		if ((sim.mutationFrequencies(NULL, mut) >= 0.5) & (AF_check))
+		{
+		   defineGlobal("AF_check", F);
+			print("Default output");
+			print("Peak Mem Usage: " + usage(peak = T));
+			print("Runtime: " + (clock()-start));
+			print(size(p1.individuals));
+			
+			//output fixed mutations
+			sim.outputFixedMutations(filePath = getwd() +"/"+ OUTPUTSTEM + "_0.5.fixed");
+			//output neutral mutations
+			m1muts = sim.mutationsOfType(m1);
+		   sim.outputMutations(m1muts, filePath = getwd() +"/"+ OUTPUTSTEM + "_0.5.neutral");
+			//output sample of 100
+			outputSample = sample(p1.individuals, 100);
+			outputSample.genome1.outputMS(filePath = getwd() +"/"+ OUTPUTSTEM + "_0.5_100.ms", filterMonomorphic = F);
+			
+			// additional output
+			outputSample.genome1.output(filePath = getwd() +"/"+ OUTPUTSTEM + "_100.out");
+			sampledIndividuals = sample(p1.individuals, 1000);
+			sampledIndividuals.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_1000.out");
+	
+			// done
+			print("Beneficial mutation has reached AF>0.5. Files output.");
+			print("Total Runtime: " + (clock()-start));
+			
+
+		}
+	}
+	else if (sim.countOfMutationsOfType(m0) == 0)
+	{
+		fixed = (sum(sim.substitutions.mutationType == m0) == 1);
+		
+		
+		if (fixed)
+		{
+			print("Default output");
+			print("Peak Mem Usage: " + usage(peak = T));
+			print("Runtime: " + (clock()-start));
+			print(size(p1.individuals));
+			
+			//output fixed mutations
+			sim.outputFixedMutations(filePath = getwd() +"/"+ OUTPUTSTEM + "_1.0.fixed");
+			//output neutral mutations
+			m1muts = sim.mutationsOfType(m1);
+		   sim.outputMutations(m1muts, filePath = getwd() +"/"+ OUTPUTSTEM + "_1.0.neutral");
+			//output sample of 100
+			outputSample = sample(p1.individuals, 100);
+			outputSample.genome1.outputMS(filePath = getwd() +"/"+ OUTPUTSTEM + "_1.0_100.ms", filterMonomorphic = F);
+			
+			// additional output
+			outputSample.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_100.out");
+			sampledIndividuals = sample(p1.individuals, 1000);
+			sampledIndividuals.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_1000.out");
+	
+			// done
+			print("Default output completed. Ending simulation now...");
+			print("Total Runtime: " + (clock()-start));
+			sim.simulationFinished();
+
+		}
+		else
+		{
+			print(simID + ": LOST - RESTARTING\n");
+			
+			// go back to generation 1000
+			sim.readFromPopulationFile(OUTPUTSTEM + '_' +  simID +  ".txt");
+			
+			// start a newly seeded run
+			setSeed(rdunif(1, 0, asInteger(2^62) - 1));
+			
+			// re-introduce the sweep mutation
+			target = sample(p1.individuals.genomes, 1);
+			target.addNewDrawnMutation(m0, 15001);
+		}
+	}
+}
