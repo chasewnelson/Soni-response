@@ -680,6 +680,9 @@ pi_corr_factor <- 1e5
 # SAVE SOURCE
 # write_tsv(codon_based_pi_results_bootstrap_LONG, 'Figure1b_source.txt')
 
+# piN/piS values
+dplyr::select(filter(codon_based_pi_results_bootstrap, sample_size == 100), model, dNdS, P_value, Q_Z_BH, P_ALS, Q_ASL_BH)
+
 
 # --------------------------------------------------------------------------------
 # SUMMARIZE SIMULATION METRICS
