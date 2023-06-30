@@ -74,7 +74,7 @@ DFE_points_10000 <- tibble(DFE = c(rep('DFE1', 10000),
 
 
 # -----------------------------------------------------------------------------
-# IMPORT simulation results for analyses shown in Figures 1a and 1c
+# IMPORT simulation results for analyses shown in Figures 1b and 1c
 
 # Mutations
 (DFE_mutations <- read_delim("data/DFE_mutations.txt", 
@@ -356,7 +356,7 @@ wilcox.test(filter(codon_based_pi_repMeans, model == 'Sel/DFE2', sample_size == 
 # POINT PLOT
 pi_corr_factor = 1e5
 (codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT <- ggplot(filter(codon_based_pi_repMeans_LONG_SUMMARY, sample_size == 100), 
-                                                          mapping = aes(x = as.factor(1), y = mean_pi * pi_corr_factor, color = site_type)) +  # as.factor(sample_size)
+                                                          mapping = aes(x = as.factor(1), y = mean_pi * pi_corr_factor, color = site_type)) +
   geom_point(position = position_dodge(.2), size = 0.75) +
   
   # SD - which Soni et al. use
@@ -632,7 +632,7 @@ codon_based_pi_results_bootstrap_LONG[codon_based_pi_results_bootstrap_LONG$site
 # PLOT
 pi_corr_factor <- 1e5
 (codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT2 <- ggplot(filter(codon_based_pi_results_bootstrap_LONG, sample_size == 100), 
-                                                           mapping = aes(x = as.factor(1), y = pi * pi_corr_factor, color = site_type)) +  # as.factor(sample_size)
+                                                           mapping = aes(x = as.factor(1), y = pi * pi_corr_factor, color = site_type)) +
   geom_point(position = position_dodge(.2), size = 0.75) +
   
   # SD
@@ -692,10 +692,10 @@ mutations_per_rep <- arrange(mutations_per_rep, model, sample_size, rep)
 mutations_per_rep$model <- factor(mutations_per_rep$model, levels = c('Neu/DFE1', 'Sel/DFE1', 'Neu/DFE2', 'Sel/DFE2'))
 
 # PLOT
-(mutations_per_rep_BOXPLOT <- ggplot(filter(mutations_per_rep, sample_size == 100), aes(x = model, y = mut_count)) +  # aes(x = as.factor(1), y = mean_count)) +
+(mutations_per_rep_BOXPLOT <- ggplot(filter(mutations_per_rep, sample_size == 100), aes(x = model, y = mut_count)) +
   
   # BOXPLOT
-  geom_boxplot(outlier.size = 0.5, outlier.shape = 21, outlier.fill = NA, outlier.stroke = 0.2, linewidth = 0.25, fatten = 1) +  # , width = 0.5
+  geom_boxplot(outlier.size = 0.5, outlier.shape = 21, outlier.fill = NA, outlier.stroke = 0.2, linewidth = 0.25, fatten = 1) +
   stat_summary(fun = 'mean', geom = 'point', shape = 23, size = 1, fill = 'black') +
   
   # OBSERVED MEAN
@@ -714,7 +714,7 @@ mutations_per_rep$model <- factor(mutations_per_rep$model, levels = c('Neu/DFE1'
         axis.ticks.x = element_blank(),
         panel.border = element_rect(),
         strip.background = element_blank()) +
-  scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0.1))))  # limits = c(-1, 1)
+  scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0.1))))
 
 # SAVE PLOT
 # jpeg(filename = 'Figure1c.jpg', width = 2.25, height = 2, units = 'in', res = 500)
