@@ -1,9 +1,19 @@
 # Response to Soni et al.
-Modified scripts, analysis code, and source data for response to Soni et al. 2023.
+Scripts, analysis code, intermediate files, and source data for response to Soni et al. 2023.
 
-## Description
+## <a name="citation"></a>Citation
 
-Two SLiM scripts (with and without a beneficial mutation introduced) were downloaded from [Soni et al.](https://github.com/vivaksoni/Gu_etal_2023_response/tree/main/scripts) (accessed 2023/06/16).
+When using this repository, please refer to and cite:
+
+>Nelson CW, Poon LLM, Gu H. Reply to: Population genetic considerations regarding the interpretation of within-patient SARS-CoV-2 polymorphism data. *Nature Communications*, in review.
+
+and this page:
+
+>https://github.com/chasewnelson/Soni_response
+
+## <a name="description"></a>Description
+
+DFE\* and Flynn\* SLiM scripts were downloaded from [Soni et al.](https://github.com/vivaksoni/Gu_etal_2023_response/tree/main/scripts).
 
 Updated versions that print additional output (`*_addOutput.slim`) were saved with the following lines of Eidos code added:
 
@@ -16,7 +26,7 @@ sampledIndividuals.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_1000
 
 Results in our response are based on the `*_100.out` data only, analogous to a uniform coverage of 100 effective sequencing reads, matching the method of Soni et al.
 
-Each script was run with a weakly or strongly deleterious mutation background as follows:
+Each DFE\* script (accessed 2023/06/16) was run with a weakly or strongly deleterious mutation background as follows:
 
 ```bash
 # Weakly deleterious background with no beneficial mutations (Weak / -)
@@ -32,22 +42,32 @@ for i in $(seq 1 100); do slim -d GENOMESIZE=30000 -d MU=2.135e-6 -d INIT=1 -d K
 for i in $(seq 1 100); do slim -d GENOMESIZE=30000 -d MU=2.135e-6 -d INIT=1 -d K=1e5 -d REPRO=1 -d RUNTIME=168 -d R=5.5e-5 -d XI=0 -d BURSTN=100 -d "OUTPUTSTEM='results/DFE_beneficial/DFE2_rep$i'" -d d_f0=0.1 -d d_f1=0.1 -d d_f2=0.1 -d d_f3=0.7 -d simID="$i" sc2_DFE_beneficial_addOutput.slim > results/DFE_beneficial/DFE2_rep${i}.log; done;
 ```
 
-Data corresponding to the `Mutation` and `Genome` blocks of SLiM output were extracted from the output files at the command line as follows:
+Flynn\* (accessed 2023/09/26) and Bloom scripts were run as follows (note that Bloom DFE specifications are hard-coded; see script):
 
 ```bash
-# Mutation data - no beneficial mutation introduced (-)
-grep -E '^[0-9]' results/DFE/*.out > DFE_mutations.txt
+# Flynn 1% beneficial
+for i in $(seq 1 100); do slim -d GENOMESIZE=30000 -d MU=2.135e-6 -d INIT=1 -d K=1e3 -d REPRO=1 -d RUNTIME=168 -d R=5.5e-5 -d XI=0 -d BURSTN=100 -d "OUTPUTSTEM='results/Flynn1pct/Flynn1pct_rep$i'" -d d_f0=0.542 -d d_f1=0.112 -d d_f2=0.02 -d d_f3=0.326 -d d_fb=0.01 -d simID="$i" sc2_Flynn_etal_DFE_addOutput.slim > results/Flynn1pct/Flynn1pct_rep${i}.log; done;
 
-# Mutation data - one beneficial mutation introduced (+)
-grep -E '^[0-9]' results/DFE_beneficial/*.out > DFE_beneficial_mutations.txt
+# Flynn 10% beneficial
+for i in $(seq 1 100); do slim -d GENOMESIZE=30000 -d MU=2.135e-6 -d INIT=1 -d K=1e3 -d REPRO=1 -d RUNTIME=168 -d R=5.5e-5 -d XI=0 -d BURSTN=100 -d "OUTPUTSTEM='results/Flynn10pct/Flynn10pct_rep$i'" -d d_f0=0.445 -d d_f1=0.112 -d d_f2=0.02 -d d_f3=0.326 -d d_fb=0.097 -d simID="$i" sc2_Flynn_etal_DFE_addOutput.slim > results/Flynn10pct/Flynn10pct_rep${i}.log; done;
 
-# Genome data - no beneficial mutation introduced (-)
-grep -E '^p' results/DFE/*.out | sed -E 's/ A/\tA/g' | sed -E 's/A /A\t/g' | sed -E 's/ /,/g' > DFE_genomes.txt
-
-# Genome data - one beneficial mutation introduced (+)
-grep -E '^p' results/DFE_beneficial/*.out | sed -E 's/ A/\tA/g' | sed -E 's/A /A\t/g' | sed -E 's/ /,/g' > DFE_beneficial_genomes.txt
+# Bloom & Neher DFE
+for i in $(seq 1 100); do slim -d GENOMESIZE=30000 -d MU=2.135e-6 -d INIT=1 -d K=1e3 -d REPRO=1 -d RUNTIME=168 -d R=5.5e-5 -d "OUTPUTSTEM='results/BloomDFE/BloomDFE_rep$i'" -d simID="$i" sc2_BloomDFE.slim > results/BloomDFE/BloomDFE_rep${i}.log; done;
 ```
 
-These raw output files are available in the `/data/` directory.
+For each simulation above, data corresponding to the `Mutation` and `Genome` blocks of SLiM output were extracted from the output files at the command line as follows (replacing 'DFE' with the appropriate simulation type):
 
-All subsequent wrangling and analysis was performed manually in the R script `Soni_response.R`, R version 4.2.2 (2022-10-31), RStudio 2023.06.0+421. The following library packages were used: base, boot, datasets, dplyr, forcats, ggplot2, graphics, grDevices, lubridate, methods, purrr, RColorBrewer, readr, scales, stats, stringr, tibble, tidyr, tidyverse, utils.
+```bash
+# Mutation data
+grep -E '^[0-9]' results/DFE/*.out > DFE_mutations.txt
+
+# Genome data
+grep -E '^p' results/DFE/*.out | sed -E 's/ A/\tA/g' | sed -E 's/A /A\t/g' | sed -E 's/ /,/g' > DFE_genomes.txt
+```
+
+All raw output, random seeds used, intermediate data files, and Figure source data are available in the `/data/` directory of this repository. The file `aamut_fitness_all.csv` should be obtained from [Bloom & Neher](https://academic.oup.com/ve/article/9/2/vead055/7265011) at the study [GitHub link](https://raw.githubusercontent.com/jbloomlab/SARS2-mut-fitness/main/results/aa_fitness/aamut_fitness_all.csv) (public_2023-10-01 dataset; accessed 2023/10/05).
+
+All subsequent wrangling and analysis were performed manually in the R scripts `Soni_response.R` and `Bloom_SC2_DFE.R`, R version 4.2.2 (2022-10-31) and RStudio 2023.06.0+421, or R version 4.3.1 (2023-06-16) and RStudio 2023.06.1+524. R scripts are meant to be run interactively, line-by-line in RStudio. Figures were produced in R and annotated in PowerPoint. The following R libraries were used: base, boot, data.table, datasets, dplyr, forcats, ggplot2, graphics, grDevices, lubridate, MASS, methods, purrr, RColorBrewer, readr, scales, stats, stringr, tibble, tidyr, tidyverse, utils, zoo. 
+
+## <a name="contact"></a>Contact
+If you have questions about this repository, please click on the <a target="_blank" href="https://github.com/chasewnelson/Soni_response/issues">Issues</a> tab at the top of this page and begin a new thread, so that others might benefit from the discussion.

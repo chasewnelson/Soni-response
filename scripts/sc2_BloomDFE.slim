@@ -1,0 +1,137 @@
+// SLiM script of intrahost SARS-CoV-2 evolution based on DFE estimated from Bloom & Neher 2023
+// Author: Chase W. Nelson, chase.nelson@nih.gov
+// Cite: Nelson et al.; https://github.com/chasewnelson/Soni_response
+// Script modified from sc2_Flynn_etal_DFE.slim of Soni et al. - https://github.com/vivaksoni/Gu_etal_2023_response/tree/main
+// Bloom & Neher 2023 - https://academic.oup.com/ve/article/9/2/vead055/7265011
+
+// ----------------------------------------------------------------------
+initialize() {
+	// SLiMgui constants for debugging
+	if(exists("slimgui")) {
+		setwd("~/Desktop");  // <= CHANGE TO DIRECTORY OF CHOICE
+		
+		defineConstant("GENOMESIZE", 30000);  // -d GENOMESIZE=30000
+		defineConstant("MU", 2.135e-6);  // -d MU=2.135e-6
+		defineConstant("INIT", 1);  // -d INIT=1
+		defineConstant("K", 1e3);  // -d K=1e5 <== DEBUG
+		defineConstant("REPRO", 1);  // -d REPRO=1
+		defineConstant("RUNTIME", 168);  // -d RUNTIME=168
+		defineConstant("R", 5.5e-5);  // -d R=5.5e-5
+		defineConstant("OUTPUTSTEM", "Bloom_rep1");
+	}
+	
+	//	----------------------------------------
+	// Initialize
+	defineGlobal("start", clock());  // start the clock
+	defineGlobal("AF_check", T);  // Boolean used once files are output at AF >= 0.5
+	initializeSLiMModelType("nonWF");
+	initializeMutationRate(MU);
+	initializeRecombinationRate(R);
+	
+	// ----------------------------------------
+	// WHOLE GENOME - background DFE
+	
+	// Bloom fractions of nonsynonymous
+	defineConstant("f1", 0.09068);  // lethal = 0.09068 / 09097 non-Spike135
+	defineConstant("f2", 0.42043);  // deleterious = 0.42043 / 42123 non-Spike135
+	defineConstant("f3", 0.47396);  // neutral =  0.47396 / 47326 non-Spike135
+	defineConstant("f4", 0.01493);  // beneficial = 0.01493 / 01455 non-Spike135
+	
+	// mutation types
+	initializeMutationType("m1", 0.5, "f", -1.0);  // lethal
+	initializeMutationType("m2", 0.5, "g", -0.31673, 1.70271);  // deleterious // non-Spike135: -0.31708, 1.70541
+	initializeMutationType("m3", 0.5, "f", 0.0);  // neutral
+	initializeMutationType("m4", 0.5, "e", 0.08672);  // beneficial
+	
+	// nsyn
+	initializeGenomicElementType("g1", c(m1, m2, m3, m4), c(f1, f2, f3, f4));
+	
+	// syn
+	initializeGenomicElementType("g2", m3, 1);
+	
+	// ----------------------------------------
+	// Construct genome
+	
+	// all coding
+	for (i in seq(0, GENOMESIZE - 1, 1)) {
+		if(i % 3 == 1) {  // codon site 1
+			initializeGenomicElement(g1, i, i);  // nsyn
+		} else if(i % 3 == 2) {  // codon site 2
+			initializeGenomicElement(g1, i, i);  // nsyn
+		} else if(i % 3 == 0) {  // codon site 3
+			initializeGenomicElement(g2, i, i);  // syn
+		}
+	}
+}
+
+
+// ----------------------------------------------------------------------
+// reproduction callback - always used
+reproduction() {
+	recombPartner = subpop.sampleIndividuals(1);
+	
+	if(REPRO > 0) {
+		for(i in 1:REPRO) {
+			breaks = sim.chromosome.drawBreakpoints(individual);
+			subpop.addRecombinant(individual.genome1, recombPartner.genome1, breaks, NULL, NULL, NULL);
+		}
+	}
+}
+
+
+// ----------------------------------------------------------------------
+// set mutation type parameters
+1 first() {
+	for(mutType in community.allMutationTypes) {
+		mutType.convertToSubstitution = F;  // all mutations remain mutation objects
+		mutType.mutationStackGroup = 1;
+		mutType.mutationStackPolicy = "l";
+	}
+}
+
+
+// ----------------------------------------------------------------------
+// establish population - haploid
+1 early() {
+	sim.addSubpop("p1", 1, haploid = T);
+}
+
+
+// ----------------------------------------------------------------------
+// run simulation ~indefinitely, to be terminated at sampling
+2:1680 early() {
+	//debug output occurs every 10 and 100+1 ticks
+	x = community.tick;
+	if(x%10==0 | x%100==1)
+	{
+		print(x + " Early:");
+		print("Debug Output");
+		print("Mem Usage: " + usage(peak = F));
+		print("Runtime: " + (clock()-start));
+		print("Population size: " + p1.individualCount);
+	}
+	//scale fitness based on population's carrying capcity
+	p1.fitnessScaling = K/p1.individualCount;
+}
+
+
+// ----------------------------------------------------------------------
+// sample infection and terminate
+168 early() {
+	print("Default output");
+	print("Peak Mem Usage: " + usage(peak = T));
+	print("Runtime: " + (clock()-start));
+	print(size(p1.individuals));
+	
+	// output sample of 100
+	sampledIndividuals100 = sample(p1.individuals, 100);
+	sampledIndividuals100.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_100.out");
+	
+	// output sample of 1000
+	sampledIndividuals1000 = sample(p1.individuals, 1000);
+	sampledIndividuals1000.genome1.output(filePath = getwd() + "/" + OUTPUTSTEM + "_1000.out");
+	
+	print("Total Runtime: " + (clock() - start));
+	sim.simulationFinished();
+}
+

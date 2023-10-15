@@ -1,8 +1,9 @@
 # --------------------------------------------------------------------------------
 # Analyse Soni et al. SLiM results
 # Author: Chase W. Nelson, chase.nelson@nih.gov
-# Cite: https://github.com/chasewnelson/Soni_response
+# Cite: Nelson et al.; https://github.com/chasewnelson/Soni_response
 # Description: wrangle and analyse results of Soni et al. SARS-CoV-2 intrahost evolution simulations
+# UPDATED for Soni et al. revision
 # --------------------------------------------------------------------------------
 
 # Import libraries
@@ -10,9 +11,10 @@ library(tidyverse)
 library(scales)
 library(RColorBrewer)
 library(boot)
+library(zoo)
 
 # set working directory (top-level)
-setwd('Soni_response')  # change to wherever this is located on your machine
+setwd('Soni_response')  # change to wherever this repository is located on your machine
 
 
 # --------------------------------------------------------------------------------
@@ -30,66 +32,90 @@ setwd('Soni_response')  # change to wherever this is located on your machine
 # 10% f2, which is m3 (s = -0.1 to -0.01)
 # 70% f3, which is m4 (s = -1 to -0.1)
 
-# Simulate 10k mutations using each of their DFEs
+# DFE 3 - Empirical with 1% beneficial - Soni et al. added in their v2
+# 53.7% f0, which is m1 (s = 0) | .542/(.542+.112+.02+.326+.01)==0.5366337
+# 11.1% f1, which is m2 (s = -0.01 to -0.001) | .112/(.542+.112+.02+.326+.01)==0.1108911
+# 2.0% f2, which is m3 (s = -0.1 to -0.01) | .02/(.542+.112+.02+.326+.01)==0.01980198
+# 32.3% f3, which is m4 (s = -1 to -0.1) | .326/(.542+.112+.02+.326+.01)==0.3227723
+# 1.0% EXTRA fb, which is m0 (s = 0.05 to 0.13) | .01/(.542+.112+.02+.326+.01)==0.00990099
+
+# DFE 4 - Empirical with 10% beneficial - Soni et al. added in their v2
+# 44.5% f0, which is m1 (s = 0) | 0.445/(0.445+0.112+0.02+0.326+0.097)==0.445
+# 11.2% f1, which is m2 (s = -0.01 to -0.001) | 0.112/(0.445+0.112+0.02+0.326+0.097)==0.112
+# 2.0% f2, which is m3 (s = -0.1 to -0.01) | 0.02/(0.445+0.112+0.02+0.326+0.097)==0.02
+# 32.6% f3, which is m4 (s = -1 to -0.1) | 0.326/(0.445+0.112+0.02+0.326+0.097)==0.326
+# 9.7% EXTRA fb, which is m0 (s = 0.05 to 0.13) | 0.097/(0.445+0.112+0.02+0.326+0.097)==0.097
+
+# DFE 5 - Bloom & Neher-based - we added in our updated response
+# 0.09068 lethal, "m1", -1.0
+# 0.42043 deleterious, "m2", gamma mean = -0.31673, shape = 1.70271
+# 0.47396 neutral, "m3", 0.0
+# 0.01493 beneficial, "m4", exponential mean = 0.08672
+
+# Simulate 10k mutations using each of their DFEs, with Flynn beneficials at 1% and 10%, BloomDFE whole genome values
 DFE_points_10000 <- tibble(DFE = c(rep('DFE1', 10000),
-                                   rep('DFE2', 10000)),
+                                   rep('DFE2', 10000),
+                                   rep('DFE3', 10000),
+                                   rep('DFE4', 10000),
+                                   rep('DFE5', 10000)),
                            s = c(c(runif(1000, -1, -0.1), runif(1000, -0.1, -0.01), runif(7000, -0.01, -0.001), rep(0, 1000)),
-                                 c(runif(7000, -1, -0.1), runif(1000, -0.1, -0.01), runif(1000, -0.01, -0.001), rep(0, 1000))
+                                 c(runif(7000, -1, -0.1), runif(1000, -0.1, -0.01), runif(1000, -0.01, -0.001), rep(0, 1000)),
+                                 c(runif(99, 0.05, 0.13), runif(3228, -1, -0.1), runif(198, -0.1, -0.01), runif(1109, -0.01, -0.001), rep(0, 5366)),
+                                 c(runif(970, 0.05, 0.13), runif(3260, -1, -0.1), runif(200, -0.1, -0.01), runif(1120, -0.01, -0.001), rep(0, 4450)),
+                                 c(rep(-1, 907), -rgamma(n = 4204, shape = 1.702711424, rate = 5.375853847), rep(0, 4740), rexp(149, rate = 1 / 0.08671586))
                            ))
 
-# PLOT
-(Soni_DFE_VIOLINPLOT <- ggplot(DFE_points_10000, aes(x = as.factor(1), y = s)) +
-  
-  # VIOLIN
-  geom_violin(linewidth = 0.2, fill = 'lightgrey') +
-  
-  # s=0, neutral line
-  geom_hline(yintercept = 0, linetype = 'solid', color = 'black', linewidth = .25) +
-  
-  # panels
-  facet_wrap(. ~ factor(DFE,
-                        levels = c("DFE1", "DFE2"),
-                        labels = c("Weak del", "Strong del")),
-             nrow = 2) +
-  coord_flip() +
-  theme_bw() +
-  theme(panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        legend.position = 'none',
-        legend.title = element_blank(),
-        axis.text.x = element_text(size = 8),
-        panel.border = element_rect(),
-        strip.background = element_blank()) +
-  
-  scale_x_discrete(expand = expansion(mult = c(0.5, 0.5))) +
-  scale_y_continuous(limits = c(-1, 1), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0))))
+# replace s < -1 with simply -1 (it's effectively lethal)
+DFE_points_10000[DFE_points_10000$s < -1, ]$s <- -1
 
-# SAVE PLOT
-# jpeg(filename = 'Figure1a.jpg', width = 2, height = 2.13, units = 'in', res = 500)
-# print(Soni_DFE_BOXPLOT)
-# dev.off()
+# PLOT
+(Soni_DFE_VIOLINPLOT <- ggplot(filter(DFE_points_10000), aes(x = as.factor(1), y = s)) +
+  
+      # VIOLIN
+      geom_violin(linewidth = 0.2, fill = 'lightgrey') +
+      
+      # s=0
+      geom_hline(yintercept = 0, linetype = 'solid', color = 'black', size = .25) +
+      
+      facet_wrap(. ~ DFE, ncol = 1) +
+      coord_flip() +
+      theme_bw() +
+      scale_x_discrete(expand = expansion(mult = c(0.5, 0.5))) +
+      scale_y_continuous(limits = c(-1, 1), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0))))
 
 # SAVE SOURCE
-# write_tsv(DFE_points_10000, 'Figure1a_source.txt')
+# write_tsv(DFE_points_10000, 'Figure_DFEs_source.txt')
 
 
 # -----------------------------------------------------------------------------
-# IMPORT simulation results for analyses shown in Figures 1b and 1c
+# IMPORT simulation results for analyses shown in Figures 1b, 1c, 2b
 
 # Mutations
-(DFE_mutations <- read_delim("data/DFE_mutations.txt", 
+(DFE_mutations <- read_delim("data/DFE_mutations.txt",
                              col_names = c('file_tempID', 'ID', 'mut_type', 'pos', 's', 'h', 'subpop_ID', 'tick', 'freq'), 
                              delim = " "))
 (DFE_beneficial_mutations <- read_delim("data/DFE_beneficial_mutations.txt", 
                                         col_names = c('file_tempID', 'ID', 'mut_type', 'pos', 's', 'h', 'subpop_ID', 'tick', 'freq'), 
                                         delim = " "))
 
+# Added in Soni et al. updated response
+(Flynn1pct_mutations <- read_delim("data/Flynn1pct_mutations.txt",
+                             col_names = c('file_tempID', 'ID', 'mut_type', 'pos', 's', 'h', 'subpop_ID', 'tick', 'freq'), 
+                             delim = " "))
+(Flynn10pct_mutations <- read_delim("data/Flynn10pct_mutations.txt",
+                                        col_names = c('file_tempID', 'ID', 'mut_type', 'pos', 's', 'h', 'subpop_ID', 'tick', 'freq'), 
+                                        delim = " "))
+
+# Added in response to reviewers - new estimated Bloom & Neher DFE
+(BloomDFE_mutations <- read_delim("data/BloomDFE_mutations.txt",
+                                   col_names = c('file_tempID', 'ID', 'mut_type', 'pos', 's', 'h', 'subpop_ID', 'tick', 'freq'), 
+                                   delim = " "))
 
 # --------------------------------------------------------------------------------
 # MUTATION ANALYSIS
 
 # Combine and wrangle
-mutations <- rbind(DFE_mutations, DFE_beneficial_mutations)
+mutations <- rbind(DFE_mutations, DFE_beneficial_mutations, Flynn1pct_mutations, Flynn10pct_mutations, BloomDFE_mutations)
 
 # extract metadata from first column
 mutations$tempID <- as.integer(str_replace(mutations$file_tempID, ".*:", ""))
@@ -102,6 +128,10 @@ mutations$rep <- as.integer(str_replace(mutations$file_tempID, ".*_rep(\\d+)_.*"
 mutations$model <- as.character(NA)
 mutations[mutations$model_type == 'DFE', ]$model <- paste0('Neu/', mutations[mutations$model_type == 'DFE', ]$model_subtype)
 mutations[mutations$model_type == 'DFE_beneficial', ]$model <- paste0('Sel/', mutations[mutations$model_type == 'DFE_beneficial', ]$model_subtype)
+mutations[mutations$model_type == 'Flynn1pct', ]$model <- paste0('Emp/', mutations[mutations$model_type == 'Flynn1pct', ]$model_subtype)
+mutations[mutations$model_type == 'Flynn10pct', ]$model <- paste0('Emp/', mutations[mutations$model_type == 'Flynn10pct', ]$model_subtype)
+mutations[mutations$model_type == 'BloomDFE', ]$model <- paste0('Emp/', mutations[mutations$model_type == 'BloomDFE', ]$model_subtype)
+unique(mutations$model)  # "Neu/DFE1"       "Neu/DFE2"       "Sel/DFE1"       "Sel/DFE2"       "Emp/Flynn1pct"  "Emp/Flynn10pct" "Emp/BloomDFE"  
 
 # new AF, MAF columns
 mutations$AF <- mutations$freq / mutations$sample_size
@@ -111,17 +141,30 @@ mutations[mutations$AF > 0.5, ]$MAF <- 1 - mutations[mutations$AF > 0.5, ]$AF
 # reorder
 mutations <- dplyr::select(mutations, -file_tempID)
 mutations <- dplyr::select(mutations, model, model_type, model_subtype, sample_size, rep, tempID, everything())
-mutations
 
 # verify
-unique(mutations$model)  # "Neu/DFE1" "Neu/DFE2" "Sel/DFE1" "Sel/DFE2"
-unique(mutations$model_type)  # "DFE" "DFE_beneficial"
-unique(mutations$model_subtype)  # "DFE1" "DFE2"
+unique(mutations$model)  # "Neu/DFE1"       "Neu/DFE2"       "Sel/DFE1"       "Sel/DFE2"       "Emp/Flynn1pct"  "Emp/Flynn10pct" "Emp/BloomDFE"  
+unique(mutations$model_type)  # "DFE"            "DFE_beneficial" "Flynn1pct"      "Flynn10pct"     "BloomDFE" 
+unique(mutations$model_subtype)  # "DFE1"       "DFE2"       "Flynn1pct"  "Flynn10pct" "BloomDFE"  
 unique(mutations$sample_size)  # 100 1000
 length(unique(mutations$rep))  # 100 QED
-unique(mutations$mut_type)  # "m1" "m2" "m3" "m4"
+unique(mutations$mut_type)  # "m1" "m2" "m3" "m4" "m0" 
 # All good!
 
+# -----
+# Estimate fb proportion of beneficial mutations in DFE_beneficial_mutations
+(mutations_DFE_ben_max_IDs <- filter(mutations, model_type == 'DFE_beneficial') %>%
+   group_by(model_subtype, rep) %>%
+   summarise(
+      max_tempID = max(tempID),
+      max_ID = max(ID)
+   ))
+
+1 / mean(mutations_DFE_ben_max_IDs$max_ID)  # 7.15365e-07 ==> 0.00007%
+# mean == 1397888
+# 7.153649e-07 the mean fraction of beneficial mutations here, i.e., 7.153649e-07 = 0.0000007 = 0.00007%
+
+# ------
 # add site
 mutations$site <- mutations$pos + 1
 
@@ -130,20 +173,17 @@ mutations$site_type <- as.character(NA)
 mutations[mutations$site %% 3 == 1, ]$site_type <- 'N'
 mutations[mutations$site %% 3 == 2, ]$site_type <- 'N'
 mutations[mutations$site %% 3 == 0, ]$site_type <- 'S'
-unique(mutations$site_type)
 
 # add codon number
 mutations$codon <- as.integer(NA)
 mutations$codon <- ceiling(mutations$site / 3)
 
 # reorder
-mutations <- dplyr::select(mutations, -file_tempID)
+mutations <- dplyr::select(mutations, -file_tempID)  # redundant
 mutations <- dplyr::select(mutations, model, model_type, model_subtype, sample_size, rep, tempID, ID, pos, site, everything())
-mutations
 
 # Filter to Gu specifications of MAF >= 0.025
 mutations_filtered <- filter(mutations, MAF >= 0.025)
-# 3,420 × 19
 
 # multiallelic sites?
 mutations_per_site <- mutations_filtered %>%
@@ -152,11 +192,11 @@ mutations_per_site <- mutations_filtered %>%
    num_muts = n()
   )
 
-nrow(mutations_filtered)  # 3420
-nrow(filter(mutations_per_site, num_muts > 1))  # just 1, our pi calculation can safely ignore multiallelic sites
+nrow(mutations_filtered)  # 32774
+nrow(filter(mutations_per_site, num_muts > 1))  # just 23 across all models/reps, can safely ignore multiallelic sites
 
 # Mutations per replicate (analogous to per sample)
-mutations_per_rep <- mutations_filtered %>%
+(mutations_per_rep <- mutations_filtered %>%
  group_by(model, sample_size, rep) %>%
  summarise(
   mut_count = n(),
@@ -164,7 +204,7 @@ mutations_per_rep <- mutations_filtered %>%
   median_MAF = median(MAF),
   sd_MAF = sd(MAF),
   Q1_MAF = quantile(MAF, 0.25),
-  Q3_MAF = quantile(MAF, 0.75))
+  Q3_MAF = quantile(MAF, 0.75)))
 
 # ADD ROWS for reps that have NO (0) mutations left
 for (this_model in unique(mutations_per_rep$model)) {
@@ -203,13 +243,13 @@ mutations_filtered$pi <- mutations_filtered$num_pw_diffs / mutations_filtered$nu
 # SONI METHOD for piN/piS
 
 # overall pi values for each rep by site type
-mutations_pi_byRep <- mutations_filtered %>%
+(mutations_pi_byRep <- mutations_filtered %>%
  group_by(model, sample_size, rep, site_type) %>%
  summarise(
   mut_site_count = n(),
-  pi_numerator = sum(pi))
+  pi_numerator = sum(pi)))
 
-# ADD ROWS for reps that have NO (0) mutations left; their pi is 0
+# ADD ROWS for reps that have NO (0) mutations; their pi is 0 - this takes < 60sec
 for (this_model in unique(mutations_pi_byRep$model)) {
  # this_model <- 'Neu/DFE1'
  
@@ -242,36 +282,42 @@ mutations_pi_byRep[mutations_pi_byRep$site_type == 'S', ]$site_count <- 30000 * 
 mutations_pi_byRep$rep_pi <- mutations_pi_byRep$pi_numerator / mutations_pi_byRep$site_count
 
 # take the means across those reps, i.e. reps (samples) as the unit
-mutations_pi_byRep_means <- mutations_pi_byRep %>%
- group_by(model, sample_size, site_type) %>%
- summarise(
-  n = n(),
-  mean_pi = mean(rep_pi),
-  sd_pi = sd(rep_pi),
-  SE_pi = sd_pi / sqrt(n),
-  Q1_pi = quantile(rep_pi, 0.25),
-  Q3_pi = quantile(rep_pi, 0.75))
+(mutations_pi_byRep_means <- mutations_pi_byRep %>%
+      group_by(model, sample_size, site_type) %>%
+      summarise(
+         n = n(),
+         mean_pi = mean(rep_pi),
+         sd_pi = sd(rep_pi),
+         SE_pi = sd_pi / sqrt(n),
+         Q1_pi = quantile(rep_pi, 0.25),
+         Q3_pi = quantile(rep_pi, 0.75)))
 
 
 # --------------------------------------------------------------------------------
 # GU METHOD for piN/piS
 
 # INTIALIZE template
-codon_based_pi <- tibble(model = c(rep("Neu/DFE1", 2000000), rep("Neu/DFE2", 2000000), rep("Sel/DFE1", 2000000), rep("Sel/DFE2", 2000000)))
+codon_based_pi <- tibble(model = c(rep("Neu/DFE1", 2000000), 
+                                   rep("Neu/DFE2", 2000000), 
+                                   rep("Sel/DFE1", 2000000), 
+                                   rep("Sel/DFE2", 2000000),
+                                   rep("Emp/Flynn1pct", 2000000),
+                                   rep("Emp/Flynn10pct", 2000000),
+                                   rep("Emp/BloomDFE", 2000000)
+                                   ))
 
 # add cols
-codon_based_pi$sample_size <- rep(c(rep(100, 1000000), rep(1000, 1000000)), 4)
-codon_based_pi$rep <- rep(1:100, 80000)
+codon_based_pi$sample_size <- rep(c(rep(100, 1000000), rep(1000, 1000000)), 7)
+codon_based_pi$rep <- rep(1:100, 140000)
 
 # sort columns
 codon_based_pi <- arrange(codon_based_pi, model, sample_size, rep)
 
 # add codon col
-codon_based_pi$codon <- rep(1:10000, 800)
+codon_based_pi$codon <- rep(1:10000, 1400)
 
 # sort columns
 codon_based_pi <- arrange(codon_based_pi, model, sample_size, rep, codon)
-codon_based_pi
 
 # JOIN PI SUMS
 mutations_filtered_joiner <- dplyr::select(mutations_filtered, model, sample_size, rep, codon, site_type, pi)
@@ -296,7 +342,6 @@ codon_based_pi[is.na(codon_based_pi$S_diffs), ]$S_diffs <- 0
 # initialize N and S sites, all the same in the model
 codon_based_pi$N_sites <- 2
 codon_based_pi$S_sites <- 1
-codon_based_pi
 
 # calculate means for each model/sample_size/rep
 codon_based_pi_repMeans <- codon_based_pi %>%
@@ -353,9 +398,21 @@ wilcox.test(filter(codon_based_pi_repMeans, model == 'Sel/DFE2', sample_size == 
             filter(codon_based_pi_repMeans, model == 'Sel/DFE2', sample_size == 100)$piS, paired = TRUE)
 # < 2.2e-16
 
+wilcox.test(filter(codon_based_pi_repMeans, model == 'Emp/Flynn1pct', sample_size == 100)$piN, 
+            filter(codon_based_pi_repMeans, model == 'Emp/Flynn1pct', sample_size == 100)$piS, paired = TRUE)
+# 0.006706
+
+wilcox.test(filter(codon_based_pi_repMeans, model == 'Emp/Flynn10pct', sample_size == 100)$piN, 
+            filter(codon_based_pi_repMeans, model == 'Emp/Flynn10pct', sample_size == 100)$piS, paired = TRUE)
+# < 2.2e-16
+
+wilcox.test(filter(codon_based_pi_repMeans, model == 'Emp/BloomDFE', sample_size == 100)$piN, 
+            filter(codon_based_pi_repMeans, model == 'Emp/BloomDFE', sample_size == 100)$piS, paired = TRUE)
+# 0.01178
+
 # POINT PLOT
 pi_corr_factor = 1e5
-(codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT <- ggplot(filter(codon_based_pi_repMeans_LONG_SUMMARY, sample_size == 100), 
+(codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT <- ggplot(filter(codon_based_pi_repMeans_LONG_SUMMARY, sample_size == 100),  # ! model %in% c('Emp/Flynn1pct', 'Emp/Flynn10pct')
                                                           mapping = aes(x = as.factor(1), y = mean_pi * pi_corr_factor, color = site_type)) +
   geom_point(position = position_dodge(.2), size = 0.75) +
   
@@ -366,7 +423,7 @@ pi_corr_factor = 1e5
   # geom_errorbar(mapping = aes(ymin = mean_pi - CI68_pi, ymax = mean_pi + CI68_pi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
   
   # SE, the standard error - conventional
-  geom_errorbar(mapping = aes(ymin = (mean_pi - SE_pi) * pi_corr_factor, ymax = (mean_pi + SE_pi) * pi_corr_factor), linewidth = .35, width = 0, 
+  geom_errorbar(mapping = aes(ymin = (mean_pi - SE_pi) * pi_corr_factor, ymax = (mean_pi + SE_pi) * pi_corr_factor), linewidth = .35, width = 0,
                 position = position_dodge(.2)) +
   
   # IQR
@@ -375,24 +432,15 @@ pi_corr_factor = 1e5
   # empirical 95% CI
   # geom_errorbar(mapping = aes(ymin = q95lo, ymax = q95hi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
   
-  facet_wrap(. ~ factor(model,
-                        levels = c("Neu/DFE1", "Sel/DFE1", "Neu/DFE2", "Sel/DFE2"),
-                        labels = c("Weak del", "Weak del + ben", "Strong del", "Strong del + ben")),
-             nrow = 2) +
+  # facet_wrap(. ~ factor(model,
+  #                       levels = c("Neu/DFE1", "Sel/DFE1", "Neu/DFE2", "Sel/DFE2"),
+  #                       labels = c("Weak del", "Weak del + ben", "Strong del", "Strong del + ben")),
+  #            nrow = 2) +
+      
+      facet_wrap(. ~ model, nrow = 2) +
   
   ylab('pi x 10^5') +
   theme_bw() +
-  theme(panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        legend.position = 'none',
-        legend.title = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 8),
-        axis.ticks.x = element_blank(),
-        axis.title = element_blank(),
-        panel.border = element_rect(),
-        strip.text = element_blank(),
-        strip.background = element_blank()) +
   scale_color_manual(values = c('#E74C3C', '#3498DB')) +
   scale_x_discrete(expand = expansion(mult = c(0.2, 0.2))) +
   scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0.15))))
@@ -498,7 +546,7 @@ dNdS_diff_boot_fun <- function(codon_results, numerator, denominator, num_replic
 # ANALYSIS VARIABLES
 MIN_DEFINED_CODONS <- 6
 NBOOTSTRAPS <- 1000
-NCPUS <- 6
+NCPUS <- 10
 
 
 # --------------------------------------------------------------------------------
@@ -530,7 +578,7 @@ codon_based_pi_results_bootstrap <- data.frame(
  ASL_dN_gt_dS_P = numeric(), 
  ASL_dN_lt_dS_P = numeric())
 
-# LOOP EACH DATA SUBSET
+# LOOP EACH DATA SUBSET - takes < 60sec
 for (this_model in sort(unique(codon_based_pi_codonMeans$model))) {
  # this_model <- 'Neu/DFE1'
  
@@ -629,6 +677,12 @@ codon_based_pi_results_bootstrap_LONG$pi_SE <- codon_based_pi_results_bootstrap_
 codon_based_pi_results_bootstrap_LONG[codon_based_pi_results_bootstrap_LONG$site_type == 'dS', ]$pi_SE <- 
  codon_based_pi_results_bootstrap_LONG[codon_based_pi_results_bootstrap_LONG$site_type == 'dS', ]$boot_dS_SE
 
+# SAVE SOURCE
+# write_tsv(codon_based_pi_results_bootstrap_LONG, 'Figure2b_source.txt')
+
+# RELOAD codon_based_pi_results_bootstrap_LONG from Figure2b_source.txt here
+# codon_based_pi_results_bootstrap_LONG <- read_tsv("data/Figure2b_source.txt")
+
 # PLOT
 pi_corr_factor <- 1e5
 (codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT2 <- ggplot(filter(codon_based_pi_results_bootstrap_LONG, sample_size == 100), 
@@ -651,45 +705,415 @@ pi_corr_factor <- 1e5
   # empirical 95% CI
   # geom_errorbar(mapping = aes(ymin = q95lo, ymax = q95hi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
   
-  facet_wrap(. ~ factor(model,
-                        levels = c("Neu/DFE1", "Sel/DFE1", "Neu/DFE2", "Sel/DFE2"),
-                        labels = c("Weak del", "Weak del + ben", "Strong del", "Strong del + ben")),
-             nrow = 2) +
+      facet_wrap(. ~ model, nrow = 2) +
   
   ylab('pi x 10^5') +
   theme_bw() +
-  theme(panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        legend.position = 'none',
-        legend.title = element_blank(),
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 8),
-        axis.ticks.x = element_blank(),
-        panel.border = element_rect(),
-        strip.background = element_blank()) +
   scale_color_manual(values = c('#E74C3C', '#3498DB')) +
   scale_x_discrete(expand = expansion(mult = c(0.2, 0.2))) +
   scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0.15))))
 
-# SAVE POINT PLOT
-# jpeg(filename = 'Figure1b.jpg', width = 1.5, height = 2, units = 'in', res = 500)
-# print(codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT2)
-# dev.off()
+# PLOT Figure 2 (revision)
+pi_corr_factor2 <- 1e4
+(codon_based_pi_repMeans_LONG_SUMMARY_POINTPLOT3 <- ggplot(filter(codon_based_pi_results_bootstrap_LONG, sample_size == 100,
+                                                                  model %in% c('Emp/Flynn1pct', 'Emp/Flynn10pct', 'Emp/BloomDFE')), 
+                                                           mapping = aes(x = as.factor(1), y = pi * pi_corr_factor2, color = site_type)) +
+      geom_point(position = position_dodge(.2), size = 0.75) +
+      
+      # SD
+      # geom_errorbar(mapping = aes(ymin = mean_pi - sd_pi, ymax = mean_pi + sd_pi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
+      
+      # 68% CI
+      # geom_errorbar(mapping = aes(ymin = mean_pi - CI68_pi, ymax = mean_pi + CI68_pi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
+      
+      # SE, the standard error
+      geom_errorbar(mapping = aes(ymin = (pi - pi_SE) * pi_corr_factor2, ymax = (pi + pi_SE) * pi_corr_factor2), linewidth = .35, width = 0, 
+                    position = position_dodge(.2)) +
+      
+      # IQR
+      # geom_errorbar(mapping = aes(ymin = Q1_pi, ymax = Q3_pi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
+      
+      # empirical 95% CI
+      # geom_errorbar(mapping = aes(ymin = q95lo, ymax = q95hi), linewidth = .35, width = 0, position = position_dodge(0.8)) +
+      
+      facet_wrap(. ~ model, ncol = 1) +
+      
+      ylab('pi x 10^4') +
+      theme_bw() +
+      scale_color_manual(values = c('#E74C3C', '#3498DB')) +
+      scale_x_discrete(expand = expansion(mult = c(0.2, 0.2))) +
+      scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0.15))))
 
-# SAVE SOURCE
-# write_tsv(codon_based_pi_results_bootstrap_LONG, 'Figure1b_source.txt')
+# view piN/piS values
+distinct(dplyr::select(filter(codon_based_pi_results_bootstrap_LONG, sample_size == 100), model, dNdS, P_value))
 
-# piN/piS values
-dplyr::select(filter(codon_based_pi_results_bootstrap, sample_size == 100), model, dNdS, P_value, Q_Z_BH, P_ALS, Q_ASL_BH)
+
+# --------------------------------------------------------------------------------
+# NEW in light of their updated response: Bloom et al. simulations, explore ben mutations and sliding windows
+
+# count beneficials
+mutations_filtered_countMutType <- filter(mutations_filtered) %>%
+   group_by(model, sample_size, codon, mut_type) %>%
+   summarize(
+      mut_type_count = n()
+   )
+
+# initialize
+mutations_filtered_countMutType$mut_class <- 'non-ben'
+
+# mut classes for the Soni et al.
+mutations_filtered_countMutType[mutations_filtered_countMutType$model != 'Emp/BloomDFE' & 
+                                   mutations_filtered_countMutType$mut_type == 'm0',  ]$mut_class <- 'ben'
+
+# mut classes for BloomDFE
+mutations_filtered_countMutType[mutations_filtered_countMutType$model == 'Emp/BloomDFE' & 
+                               mutations_filtered_countMutType$mut_type == 'm4',  ]$mut_class <- 'ben'
+
+# COUNT BEN
+mutations_filtered_countBen <- filter(mutations_filtered_countMutType, mut_class == 'ben') %>%
+   group_by(model, sample_size, codon) %>%
+   summarise(
+      ben_count = n()
+   )
+
+# add rows for 0 beneficials
+for (this_model in unique(mutations_filtered_countBen$model)) {
+   # this_model <- 'Emp/BloomDFE'
+   
+   for (this_sample_size in unique(mutations_filtered_countBen$sample_size)) {
+      # this_sample_size <- 100
+      
+      missing_codons <- setdiff(1:max(mutations_filtered$codon),
+                                filter(mutations_filtered_countBen, model == this_model, sample_size == this_sample_size)$codon)
+      missing_codons_count <- length(missing_codons)
+      
+      no_ben_rows <- tibble(model = rep(this_model, missing_codons_count),
+                            sample_size = rep(this_sample_size, missing_codons_count),
+                            codon = missing_codons,
+                            ben_count = rep(0, missing_codons_count))
+      
+      mutations_filtered_countBen <- rbind(mutations_filtered_countBen, no_ben_rows)
+   }
+}
+
+# sort by columns
+mutations_filtered_countBen <- arrange(mutations_filtered_countBen, model, sample_size, codon)
+
+# summarise
+(mutations_filtered_countBen_SUMMARY <- mutations_filtered_countBen %>%
+      group_by(model, sample_size) %>%
+      summarize(
+         total_codons = n(),
+         ben_codons = sum(ben_count > 0),
+         prop_codons_ben = ben_codons / total_codons,
+         mean_ben = mean(ben_count)
+      ))
+
+
+# ------------------------------------------------------------------------------
+# SLIDING WINDOWS
+
+# CO-OP sliding window code from SNPGenie, https://github.com/chasewnelson/SNPGenie/blob/master/SNPGenie_sliding_windows.R
+
+# set parameters
+NUMERATOR <- "N"
+DENOMINATOR <- "S"
+WINDOW_SIZE <- 30
+STEP_SIZE <- 1
+NBOOTSTRAPS <- 1000
+MIN_DEFINED_CODONS <- 10  # meaningless in this context
+CORRECTION <- 'NONE'
+NCPUS <- 10
+# PREPEND_TO_OUTPUT <- ''
+
+# ------------------------------------------------------------------------------
+# BOOTSTRAP FUNCTION (dN - dS) for CODON UNIT, NO CORRECTION
+dNdS_diff_boot_fun <- function(codon_results, numerator, denominator, num_replicates, num_cpus) {
+   # # DUMMY
+   #  codon_results <- codon_data_filtered
+   #  numerator <- NUMERATOR
+   #  denominator <- DENOMINATOR
+   #  num_replicates <- NBOOTSTRAPS
+   #  num_cpus <- NCPUS
+   
+   # Function for dN
+   dN_function <- function(D, indices) {
+      dN <- sum(D[indices, paste0(numerator, "_diffs")], na.rm = TRUE) / sum(D[indices, paste0(numerator, "_sites")], na.rm = TRUE)
+      return(dN)
+   }
+   
+   # Function for dN
+   dS_function <- function(D, indices) {
+      dS <- sum(D[indices, paste0(denominator, "_diffs")], na.rm = TRUE) / sum(D[indices, paste0(denominator, "_sites")], na.rm = TRUE)
+      return(dS)
+   }
+   
+   # Function for dN - dS
+   dN_m_dS_function <- function(D, indices) {
+      dN <- sum(D[indices, paste0(numerator, "_diffs")], na.rm = TRUE) / sum(D[indices, paste0(numerator, "_sites")], na.rm = TRUE)
+      dS <- sum(D[indices, paste0(denominator, "_diffs")], na.rm = TRUE) / sum(D[indices, paste0(denominator, "_sites")], na.rm = TRUE)
+      dN_m_dS <- dN - dS
+      return(dN_m_dS)
+   }
+   
+   # Function for dN/dS
+   dN_over_dS_function <- function(D, indices) {
+      dN <- sum(D[indices, paste0(numerator, "_diffs")], na.rm = TRUE) / sum(D[indices, paste0(numerator, "_sites")], na.rm = TRUE)
+      dS <- sum(D[indices, paste0(denominator, "_diffs")], na.rm = TRUE) / sum(D[indices, paste0(denominator, "_sites")], na.rm = TRUE)
+      dN_over_dS <- dN / dS
+      return(dN_over_dS)
+   }
+   
+   # CREATE FUNCTION FOR dN/dS TO CALCULATE ITS SE
+   (dN <- sum(codon_results[ , paste0(numerator, "_diffs")], na.rm = TRUE) / sum(codon_results[ , paste0(numerator, "_sites")], na.rm = TRUE))
+   (dS <- sum(codon_results[ , paste0(denominator, "_diffs")], na.rm = TRUE) / sum(codon_results[ , paste0(denominator, "_sites")], na.rm = TRUE))
+   (dNdS <- dN / dS)
+   
+   # Run the BOOTSTRAPS
+   # boot dN
+   (boot_dN <- boot(data = codon_results, R = num_replicates, statistic = dN_function, parallel = 'multicore', ncpus = num_cpus))
+   (dN <- boot_dN$t0)
+   (boot_dN_SE <- sd(boot_dN$t))
+   
+   # boot dS
+   (boot_dS <- boot(data = codon_results, R = num_replicates, statistic = dS_function, parallel = 'multicore', ncpus = num_cpus))
+   (dS <- boot_dS$t0)
+   (boot_dS_SE <- sd(boot_dS$t))
+   
+   # boot dN - dS
+   (boot_dN_m_dS <- boot(data = codon_results, R = num_replicates, statistic = dN_m_dS_function, parallel = 'multicore', ncpus = num_cpus))
+   (dN_m_dS <- boot_dN_m_dS$t0)
+   (boot_dN_m_dS_SE <- sd(boot_dN_m_dS$t))
+   (boot_dN_m_dS_Z <- dN_m_dS / boot_dN_m_dS_SE)
+   (boot_dN_m_dS_P <- 2 * pnorm(-abs(boot_dN_m_dS_Z)))
+   
+   # boot dN/dS
+   (boot_dN_over_dS <- boot(data = codon_results, R = num_replicates, statistic = dN_over_dS_function, parallel = 'multicore', ncpus = num_cpus))
+   (dN_over_dS <- boot_dN_over_dS$t0)
+   (boot_dN_over_dS_SE <- sd(boot_dN_over_dS$t))
+   (boot_dN_over_dS_Z <- dN_over_dS / boot_dN_over_dS_SE)
+   (boot_dN_over_dS_P <- 2 * pnorm(-abs(boot_dN_over_dS_Z)))
+   
+   ### NEW: ASL (acheived significance level)
+   boot_dN_gt_dS_count <- sum(boot_dN_m_dS$t > 0)
+   boot_dN_eq_dS_count <- sum(boot_dN_m_dS$t == 0)
+   boot_dN_lt_dS_count <- sum(boot_dN_m_dS$t < 0)
+   ASL_dN_gt_dS_P <- boot_dN_lt_dS_count / (boot_dN_gt_dS_count + boot_dN_eq_dS_count + boot_dN_lt_dS_count)
+   ASL_dN_lt_dS_P <- boot_dN_gt_dS_count / (boot_dN_gt_dS_count + boot_dN_eq_dS_count + boot_dN_lt_dS_count)
+   
+   return(paste(num_replicates, dN, dS, dNdS, dN_m_dS, boot_dN_SE, boot_dS_SE, boot_dN_over_dS_SE, boot_dN_over_dS_P, 
+                boot_dN_m_dS_SE, boot_dN_m_dS_P, 
+                boot_dN_gt_dS_count, boot_dN_eq_dS_count, boot_dN_lt_dS_count, ASL_dN_gt_dS_P, ASL_dN_lt_dS_P,
+                sep = "\t"))
+}
+
+# ADD COLUMNS TO DATA
+codon_data <- codon_based_pi_codonMeans  # simply copy for consistent naming and no off-target ramifications
+codon_data$codon_num <- codon_data$codon
+RATIO_NAME <- paste0('pi', NUMERATOR, 'pi', DENOMINATOR)
+codon_data$sw_ratio <- RATIO_NAME
+codon_data$sw_start <- as.double(NA)
+codon_data$sw_center <- as.double(NA)
+codon_data$sw_end <- as.double(NA)
+codon_data$sw_num_replicates <- as.integer(NA)
+codon_data$sw_N_diffs <- as.double(NA)
+codon_data$sw_S_diffs <- as.double(NA)
+codon_data$sw_N_sites <- as.double(NA)
+codon_data$sw_S_sites <- as.double(NA)
+codon_data$sw_dN <- as.double(NA)
+codon_data$sw_dS <- as.double(NA)
+codon_data$sw_dNdS <- as.double(NA)
+codon_data$sw_dN_m_dS <- as.double(NA)
+codon_data$sw_boot_dN_SE <- as.double(NA)
+codon_data$sw_boot_dS_SE <- as.double(NA)
+codon_data$sw_boot_dN_over_dS_SE <- as.double(NA)
+codon_data$sw_boot_dN_over_dS_P <- as.double(NA)
+codon_data$sw_boot_dN_m_dS_SE <- as.double(NA)
+codon_data$sw_boot_dN_m_dS_P <- as.double(NA)
+codon_data$sw_boot_dN_gt_dS_count <- as.integer(NA)
+codon_data$sw_boot_dN_eq_dS_count <- as.integer(NA)
+codon_data$sw_boot_dN_lt_dS_count <- as.integer(NA)
+codon_data$sw_ASL_dN_gt_dS_P <- as.double(NA)
+codon_data$sw_ASL_dN_lt_dS_P <- as.double(NA)
+codon_data$sw_ASL_dNdS_P <- as.double(NA)
+
+# arrange
+codon_data <- dplyr::select(codon_data, model, sample_size, codon, codon_num, everything())
+codon_data <- dplyr::arrange(codon_data, model, sample_size, codon_num)
+
+# PERFORM SLIDING WINDOW - just do 'Emp/BloomDFE' because we've run out of time <== takes ~2 hours per model/sample size
+for(this_model in c('Emp/BloomDFE')) {  # in unique(codon_data$model)) {
+   # this_model <- "Emp/Flynn1pct"
+   
+   for(this_sample_size in c(100)) {  # in unique(codon_data$sample_size)) {
+      # this_sample_size <- 100
+      
+      for(i in seq(from = min(codon_data$codon_num), to = (max(codon_data$codon_num) - WINDOW_SIZE + 1), by = STEP_SIZE)) {  # always 1..10000
+      # for(i in seq(from = 9121, to = (max(codon_data$codon_num) - WINDOW_SIZE + 1), by = STEP_SIZE)) {  # always 1..10000
+         # i <- 1 # 111
+         # cat(i, "")
+         
+         # Extract window; analyze
+         window_codon_data <- filter(codon_data, model == this_model, sample_size == this_sample_size, codon_num >= i, codon_num <= (i + WINDOW_SIZE - 1))
+         # view(window_codon_data)
+         lowest_codon_num <- min(window_codon_data$codon_num)
+         highest_codon_num <- max(window_codon_data$codon_num)
+         
+         if(nrow(window_codon_data) > 1) {
+            
+            # WARNING if missing codon numbers
+            if(nrow(window_codon_data) != WINDOW_SIZE) {
+               cat("### WARNING: codon", i, "is missing.")
+               cat("### If this was unexpected or is common, there may be problems with your data.")
+            }
+            
+            ### BOOTSTRAP EACH RATIO FOR THIS WINDOW. Columns:
+            #[1] num_replicates
+            #[2] dN
+            #[3] dS
+            #[4] dNdS
+            #[5] dN_m_dS
+            #[6] boot_dN_SE
+            #[7] boot_dS_SE
+            #[8] boot_dN_over_dS_SE
+            #[9] boot_dN_over_dS_P
+            #[10] boot_dN_m_dS_SE
+            #[11] boot_dN_m_dS_P
+            #[12] boot_dN_gt_dS_count
+            #[13] boot_dN_eq_dS_count
+            #[14] boot_dN_lt_dS_count
+            #[15] ASL_dN_gt_dS_P
+            #[16] ASL_dN_lt_dS_P
+            
+            # dN/dS bootstrap with appropriate correction
+            boot_dNdS <- NA
+            if(CORRECTION == "JC") {
+               boot_dNdS <- dNdS_diff_boot_fun_JC(window_codon_data, NUMERATOR, DENOMINATOR, NBOOTSTRAPS, NCPUS)
+            } else {
+               boot_dNdS <- dNdS_diff_boot_fun(window_codon_data, NUMERATOR, DENOMINATOR, NBOOTSTRAPS, NCPUS)
+            }
+            boot_dNdS <- str_split(string = boot_dNdS, pattern = '\t')[[1]]
+            
+            # bootstrap results
+            num_replicates <- as.integer(boot_dNdS[1])
+            dN <- as.numeric(boot_dNdS[2])
+            dS <- as.numeric(boot_dNdS[3])
+            dNdS <- as.numeric(boot_dNdS[4])
+            dN_m_dS <- as.numeric(boot_dNdS[5])
+            boot_dN_SE <- as.numeric(boot_dNdS[6])
+            boot_dS_SE <- as.numeric(boot_dNdS[7])
+            boot_dN_over_dS_SE <- as.numeric(boot_dNdS[8])
+            boot_dN_over_dS_P <- as.numeric(boot_dNdS[9])
+            boot_dN_m_dS_SE <- as.numeric(boot_dNdS[10])
+            boot_dN_m_dS_P <- as.numeric(boot_dNdS[11])
+            boot_dN_gt_dS_count <- as.integer(boot_dNdS[12])
+            boot_dN_eq_dS_count <- as.integer(boot_dNdS[13])
+            boot_dN_lt_dS_count <- as.integer(boot_dNdS[14])
+            ASL_dN_gt_dS_P <- as.numeric(boot_dNdS[15])
+            ASL_dN_lt_dS_P <- as.numeric(boot_dNdS[16])
+            ASL_dNdS_P <- 1
+            
+            if(! is.na(ASL_dN_gt_dS_P) && ! is.na(ASL_dN_lt_dS_P) && ASL_dN_gt_dS_P < ASL_dN_lt_dS_P) {
+               ASL_dNdS_P <- 2 * ASL_dN_gt_dS_P
+            } else if(! is.na(ASL_dN_gt_dS_P) && ! is.na(ASL_dN_lt_dS_P)) {
+               ASL_dNdS_P <- 2 * ASL_dN_lt_dS_P
+            }
+            
+            if(ASL_dNdS_P == 0) {
+               ASL_dNdS_P <- 1 / NBOOTSTRAPS
+            }
+            
+            # Add to table
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_start <- lowest_codon_num
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_center <- (lowest_codon_num + highest_codon_num) / 2
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_end <- highest_codon_num
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_num_replicates <- num_replicates
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_N_diffs <- sum(unname(unlist(window_codon_data[ , paste0(NUMERATOR, '_diffs')])), na.rm = TRUE)
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_S_diffs <- sum(unname(unlist(window_codon_data[ , paste0(DENOMINATOR, '_diffs')])), na.rm = TRUE)
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_N_sites <- sum(unname(unlist(window_codon_data[ , paste0(NUMERATOR, '_sites')])), na.rm = TRUE)
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_S_sites <- sum(unname(unlist(window_codon_data[ , paste0(DENOMINATOR, '_sites')])), na.rm = TRUE)
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_dN <- dN
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_dS <- dS
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_dNdS <- dNdS
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_dN_m_dS <- dN_m_dS
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_SE <- boot_dN_SE
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dS_SE <- boot_dS_SE
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_over_dS_SE <- boot_dN_over_dS_SE
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_over_dS_P <- boot_dN_over_dS_P
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_m_dS_SE <- boot_dN_m_dS_SE
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_m_dS_P <- boot_dN_m_dS_P
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_gt_dS_count <- boot_dN_gt_dS_count
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_eq_dS_count <- boot_dN_eq_dS_count
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_boot_dN_lt_dS_count <- boot_dN_lt_dS_count
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_ASL_dN_gt_dS_P <- ASL_dN_gt_dS_P
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_ASL_dN_lt_dS_P <- ASL_dN_lt_dS_P
+            codon_data[codon_data$codon_num == lowest_codon_num, ]$sw_ASL_dNdS_P <- ASL_dNdS_P
+            
+         } # else leave it as NA
+      } # end last window
+   }
+}
+
+# SAVE 
+# write_tsv(filter(codon_data, model == "Emp/BloomDFE", sample_size == 100), "codon_data_sw_results_BloomDFE_100.tsv")
+
+# SUBSET or RELOAD
+# codon_data_BloomDFE_100 <- filter(codon_data, model == "Emp/BloomDFE", sample_size == 100)
+codon_data_BloomDFE_100 <- read_tsv("data/codon_data_sw_results_BloomDFE_100.tsv")
+
+
+# ------------------------------------------------------------------------------
+# SELECTION CANDIDATES
+
+# define positive selection candidates & conduct 'back of napkin' false-positive rate optimization
+codon_data_BloomDFE_100$pos_sel_candidate <- codon_data_BloomDFE_100$sw_dN_m_dS > 0 & codon_data_BloomDFE_100$sw_boot_dN_m_dS_P < 0.00605  # from data exploration
+
+# JOIN ben count
+(mutations_filtered_countBen_BloomDFE_100 <- filter(mutations_filtered_countBen, model == "Emp/BloomDFE", sample_size == 100))
+
+# sliding window of ben_count
+mutations_filtered_countBen_BloomDFE_100 <- mutations_filtered_countBen_BloomDFE_100 %>%
+   mutate(ben_sw30_sum = rollsum(ben_count, k = 30, align = 'left', fill = NA))
+
+# ---
+# JOIN
+(codon_data_BloomDFE_100_JOINED <- left_join(codon_data_BloomDFE_100, mutations_filtered_countBen_BloomDFE_100, by = c('model', 'sample_size', 'codon')))
+
+# ----------
+# TRUTH is >= 1 ben
+
+# summarize
+codon_data_BloomDFE_100_JOINED %>% 
+   group_by(ben_sw30_sum >= 1) %>%
+   summarise(
+      count = n()
+   )
+# `ben_sw30_sum >= 1` count
+# 1 FALSE                1031
+# 2 TRUE                 8940
+# 3 NA                     29
+# FP of random choice: 1031 / (1031 + 8940) == 0.1033999
+
+filter(codon_data_BloomDFE_100_JOINED, sw_dN_m_dS > 0) %>% 
+   group_by(pos_sel_candidate, ben_sw30_sum >= 1) %>%
+   summarise(
+      count = n()
+   )
+# pos_sel_candidate `ben_sw30_sum >= 1` count
+# 1 FALSE             FALSE                 679
+# 2 FALSE             TRUE                 3875
+# 3 TRUE              TRUE                   80
+
+# is that better than chance?
+prop.test(x = c(8940, 80), n = c((1031 + 8940), 80))  # YES, p-value = 0.004358 QED
 
 
 # --------------------------------------------------------------------------------
 # SUMMARIZE SIMULATION METRICS
-mutations_per_rep <- arrange(mutations_per_rep, model, sample_size, rep)
+mutations_per_rep <- arrange(mutations_per_rep, model, sample_size, rep)  # these have ALREADY BEEN FILTERED for MAF >= 2.5%
 
 # PLOT mutations per sample
-mutations_per_rep$model <- factor(mutations_per_rep$model, levels = c('Neu/DFE1', 'Sel/DFE1', 'Neu/DFE2', 'Sel/DFE2'))
+mutations_per_rep$model <- factor(mutations_per_rep$model, levels = c("Neu/DFE1", "Sel/DFE1", "Neu/DFE2", "Sel/DFE2", "Emp/Flynn1pct", "Emp/Flynn10pct", "Emp/BloomDFE"))
 
 # PLOT
 (mutations_per_rep_BOXPLOT <- ggplot(filter(mutations_per_rep, sample_size == 100), aes(x = model, y = mut_count)) +
@@ -705,22 +1129,8 @@ mutations_per_rep$model <- factor(mutations_per_rep$model, levels = c('Neu/DFE1'
   geom_hline(yintercept = 5, color = 'blue', linetype = 'dashed', linewidth = .2) +
   
   theme_bw() +
-  theme(panel.grid = element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        legend.position = 'none',
-        legend.title = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(size = 8),
-        axis.ticks.x = element_blank(),
-        panel.border = element_rect(),
-        strip.background = element_blank()) +
   scale_y_continuous(limits = c(0, NA), breaks = pretty_breaks(), expand = expansion(mult = c(0, 0.1))))
 
-# SAVE PLOT
-# jpeg(filename = 'Figure1c.jpg', width = 2.25, height = 2, units = 'in', res = 500)
-# print(mutations_per_rep_BOXPLOT)
-# dev.off()
-
 # SAVE SOURCE
-# write_tsv(mutations_per_rep, 'Figure1c_source.txt')
+# write_tsv(mutations_per_rep, 'data/Figure1c_source.txt')
 
