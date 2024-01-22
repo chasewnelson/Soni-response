@@ -52,14 +52,25 @@ initialize() {
 	// ----------------------------------------
 	// Construct genome
 	
+//	// all coding - BUG, expected 1-based numbering
+//	for (i in seq(0, GENOMESIZE - 1, 1)) {
+//		if(i % 3 == 1) {  // codon site 1
+//			initializeGenomicElement(g1, i, i);  // nsyn
+//		} else if(i % 3 == 2) {  // codon site 2
+//			initializeGenomicElement(g1, i, i);  // nsyn <== should be syn because 0-based
+//		} else if(i % 3 == 0) {  // codon site 3
+//			initializeGenomicElement(g2, i, i);  // syn <== should be nsyn because 0-based
+//		}
+//	}
+	
 	// all coding
 	for (i in seq(0, GENOMESIZE - 1, 1)) {
-		if(i % 3 == 1) {  // codon site 1
-			initializeGenomicElement(g1, i, i);  // nsyn
-		} else if(i % 3 == 2) {  // codon site 2
-			initializeGenomicElement(g1, i, i);  // nsyn
-		} else if(i % 3 == 0) {  // codon site 3
-			initializeGenomicElement(g2, i, i);  // syn
+		if(i % 3 == 0) {
+			initializeGenomicElement(g1, i, i);  // codon site 1, 0-based index - NSYN
+		} else if(i % 3 == 1) {
+			initializeGenomicElement(g1, i, i);  // codon site 2, 0-based index - NSYN
+		} else if(i % 3 == 2) {
+			initializeGenomicElement(g2, i, i);  // codon site 3, 0-based index - SYN
 		}
 	}
 }

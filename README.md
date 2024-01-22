@@ -1,15 +1,15 @@
 # Response to Soni et al.
-Scripts, analysis code, intermediate files, and source data for response to Soni et al. 2023.
+Scripts, analysis code, input data, and intermediate files for response to Soni et al. 2024.
 
 ## <a name="citation"></a>Citation
 
 When using this repository, please refer to and cite:
 
->Nelson CW, Poon LLM, Gu H. Reply to: Population genetic considerations regarding the interpretation of within-patient SARS-CoV-2 polymorphism data. *Nature Communications*, in review.
+>Nelson CW, Poon LLM, Gu H. Reply to: Population genetic considerations regarding the interpretation of within-patient SARS-CoV-2 polymorphism data. *Nature Communications*, in press.
 
 and this page:
 
->https://github.com/chasewnelson/Soni_response
+>https://github.com/chasewnelson/Soni-response
 
 ## <a name="description"></a>Description
 
@@ -65,9 +65,9 @@ grep -E '^[0-9]' results/DFE/*.out > DFE_mutations.txt
 grep -E '^p' results/DFE/*.out | sed -E 's/ A/\tA/g' | sed -E 's/A /A\t/g' | sed -E 's/ /,/g' > DFE_genomes.txt
 ```
 
-All raw output, random seeds used, intermediate data files, and Figure source data are available in the `/data/` directory of this repository. The file `aamut_fitness_all.csv` should be obtained from [Bloom & Neher](https://academic.oup.com/ve/article/9/2/vead055/7265011) at the study [GitHub link](https://raw.githubusercontent.com/jbloomlab/SARS2-mut-fitness/main/results/aa_fitness/aamut_fitness_all.csv) (public_2023-10-01 dataset; accessed 2023/10/05).
+All raw output, random seeds used, and intermediate data files are available in the `/data/` directory of this repository. The file `aamut_fitness_all.csv` should be obtained from [Bloom & Neher](https://academic.oup.com/ve/article/9/2/vead055/7265011) at the study [GitHub link](https://raw.githubusercontent.com/jbloomlab/SARS2-mut-fitness/main/results/aa_fitness/aamut_fitness_all.csv) (public_2023-10-01 dataset; accessed 2023/10/05). Figure source data are provided as a Source Data file in the publication supplementary material.
 
-All subsequent wrangling and analysis were performed manually in the R scripts `Soni_response.R` and `Bloom_SC2_DFE.R`, R version 4.2.2 (2022-10-31) and RStudio 2023.06.0+421, or R version 4.3.1 (2023-06-16) and RStudio 2023.06.1+524. R scripts are meant to be run interactively, line-by-line in RStudio. Figures were produced in R and annotated in PowerPoint. The following R libraries were used: base, boot, data.table, datasets, dplyr, forcats, ggplot2, graphics, grDevices, lubridate, MASS, methods, purrr, RColorBrewer, readr, scales, stats, stringr, tibble, tidyr, tidyverse, utils, zoo. 
+All wrangling and analysis were performed manually in the R scripts `Soni-response.R` and `Bloom-SC2-DFE.R`, R version 4.2.2 (2022-10-31) and RStudio 2023.06.0+421, or R version 4.3.1 (2023-06-16) and RStudio 2023.06.1+524. R scripts are meant to be run interactively, line-by-line in RStudio. Figures were produced in R and annotated in PowerPoint. The following R libraries were used: base, boot, data.table, datasets, dplyr, forcats, ggplot2, graphics, grDevices, lubridate, MASS, methods, purrr, RColorBrewer, readr, scales, stats, stringr, tibble, tidyr, tidyverse, utils, zoo. 
 
 ## <a name="contact"></a>Contact
-If you have questions about this repository, please click on the <a target="_blank" href="https://github.com/chasewnelson/Soni_response/issues">Issues</a> tab at the top of this page and begin a new thread, so that others might benefit from the discussion.
+If you have questions about this repository, please click on the <a target="_blank" href="https://github.com/chasewnelson/Soni-response/issues">Issues</a> tab at the top of this page and begin a new thread, so that others might benefit from the discussion.
