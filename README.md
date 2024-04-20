@@ -5,7 +5,7 @@ Scripts, analysis code, input data, and intermediate files for response to Soni 
 
 When using this repository, please refer to and cite:
 
->Nelson CW, Poon LLM, Gu H. Reply to: Population genetic considerations regarding the interpretation of within-patient SARS-CoV-2 polymorphism data. *Nature Communications*, in press.
+>Nelson CW, Poon LLM, Gu H. 2024. Reply to: Population genetic considerations regarding the interpretation of within-patient SARS-CoV-2 polymorphism data. *Nature Communications*, **15:** 3239. DOI: [10.1038/s41467-024-46262-3](https://doi.org/10.1038/s41467-024-46262-3)
 
 and this page:
 
